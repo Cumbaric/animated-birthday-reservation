@@ -1,3 +1,5 @@
+'use client'
+
 export default function Screen3({
   dolazak,
   setDolazak,

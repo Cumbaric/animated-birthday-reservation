@@ -13,7 +13,6 @@ export default function Screen4({ ime, dolazak }) {
             <p>Zahvaljujemo vam što ste nas obavestili. Biće nam žao bez vas.</p>
           </>
         )}
-        <div className="animation-placeholder">ANIMACIJA OVDE</div>
       </div>
     </div>
   )
