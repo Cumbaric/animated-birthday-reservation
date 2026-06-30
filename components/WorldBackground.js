@@ -1,8 +1,9 @@
 import styles from './WorldBackground.module.css'
+import ShootingStar from './ShootingStar'
 
 /*
   Deterministic LCG — isti rezultat na serveru i klijentu, bez hydration mismatch-a.
-  Seed 99 da se ne preklapaju sa StarField.js (seed 42).
+  Seed 99 → zvezde | Seed 77 → svici (ne preklapaju se ni sa StarField seed 42)
 */
 function makeLCG(seed) {
   let s = seed >>> 0
@@ -12,19 +13,15 @@ function makeLCG(seed) {
   }
 }
 
+/* ── Zvezde ── */
 const rand = makeLCG(99)
 
-/*
-  200 zvezda raspoređenih u gornjih ~62% sveta (S1 + S2 + gornji deo S3).
-  Rasporediti gustinu: Math.pow(rawTop, 1.7) biasuje prema vrhu (S1 gušće, S3 retko).
-  Base opacity po kategoriji, zatim fazaje iz svetla ka nuli ispod 40%.
-*/
 const BASE_OPACITY = { bright: 1.0, medium: 0.85, small: 0.75, tiny: 0.5 }
 
 const WORLD_STARS = Array.from({ length: 200 }, (_, i) => {
   const r = rand()
   const rawTop = rand()
-  const topPct = Math.pow(rawTop, 1.7) * 62  // max 62% od visine sveta
+  const topPct = Math.pow(rawTop, 1.7) * 62
 
   const category =
     r > 0.955 ? 'bright'
@@ -56,43 +53,95 @@ const WORLD_STARS = Array.from({ length: 200 }, (_, i) => {
   }
 })
 
+/* ── Svici ── */
+const ffrand = makeLCG(77)
+
+/*
+  12 svičeva u donjem delu sveta (sekcije 3–4 = top: 50–87% visine sveta).
+  Koordinate su deterministički generisane — isti raspored server + klient.
+  Animacija se oslanja na CSS custom properties postavljene inline.
+*/
+const FIREFLIES = Array.from({ length: 12 }, (_, i) => ({
+  id: i,
+  top:     50 + ffrand() * 37,       // 50–87% sveta (sekcije 3–4)
+  left:     4 + ffrand() * 88,       // 4–92% širine
+  size:     2 + ffrand() * 2.5,      // 2–4.5px
+  dur:    3.5 + ffrand() * 2.5,      // 3.5–6s period
+  delay:       ffrand() * 7,         // 0–7s offset → desinhronizirani
+  fx:    (ffrand() - 0.5) * 22,      // ±11px horizontalni drift
+  fy:    (ffrand() - 0.5) * 14,      // ±7px vertikalni drift
+  opacity: 0.45 + ffrand() * 0.45,   // 0.45–0.90 osnovna providnost
+}))
+
 export default function WorldBackground() {
   return (
-    <div className={styles.worldBg} aria-hidden="true">
+    <>
+      {/* Sloj 1: gradijentno nebo — najdublji, statičan */}
+      <div className={styles.layerGradient} aria-hidden="true" />
 
-      {WORLD_STARS.map((star) => (
-        <div
-          key={star.id}
-          className={`${styles.star} ${styles[star.category] ?? ''}`}
-          style={{
-            top:    `${star.top.toFixed(2)}%`,
-            left:   `${star.left.toFixed(2)}%`,
-            width:  `${star.size.toFixed(2)}px`,
-            height: `${star.size.toFixed(2)}px`,
-            '--delay':        `${star.delay.toFixed(2)}s`,
-            '--dur':          `${star.dur.toFixed(2)}s`,
-            '--star-opacity': star.starOpacity,
-          }}
-        />
-      ))}
-
-      {/* SVG silhueta savane — lepljeno za dno sveta (dno S4) */}
-      <div className={styles.savannaWrap}>
-        <SavannaScene />
+      {/* Sloj 2: zvezde + zvezda padalica — GSAP animira Y (paralaks) */}
+      <div
+        className={styles.layerStars}
+        aria-hidden="true"
+        data-parallax="stars"
+      >
+        {WORLD_STARS.map((star) => (
+          <div
+            key={star.id}
+            className={`${styles.star} ${styles[star.category] ?? ''}`}
+            style={{
+              top:    `${star.top.toFixed(2)}%`,
+              left:   `${star.left.toFixed(2)}%`,
+              width:  `${star.size.toFixed(2)}px`,
+              height: `${star.size.toFixed(2)}px`,
+              '--delay':        `${star.delay.toFixed(2)}s`,
+              '--dur':          `${star.dur.toFixed(2)}s`,
+              '--star-opacity': star.starOpacity,
+            }}
+          />
+        ))}
+        <ShootingStar />
       </div>
 
-    </div>
+      {/* Sloj 3: lebdeći svici — topla zona, sekcije 3–4 */}
+      <div className={styles.layerFireflies} aria-hidden="true">
+        {FIREFLIES.map((f) => (
+          <div
+            key={f.id}
+            className={styles.firefly}
+            style={{
+              top:    `${f.top.toFixed(2)}%`,
+              left:   `${f.left.toFixed(2)}%`,
+              width:  `${f.size.toFixed(2)}px`,
+              height: `${f.size.toFixed(2)}px`,
+              '--ff-dur':      `${f.dur.toFixed(2)}s`,
+              '--ff-delay':    `${f.delay.toFixed(2)}s`,
+              '--fx':          `${f.fx.toFixed(1)}px`,
+              '--fy':          `${f.fy.toFixed(1)}px`,
+              '--fly-opacity': f.opacity.toFixed(2),
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Sloj 4: sunce + silhueta savane — fiksiran uz dno sveta */}
+      <div className={styles.layerSavanna} aria-hidden="true">
+        {/*
+          Sunce mora biti PRE SavannaScene u DOM-u da bi SVG teren
+          (kasniji u DOM-u = viši z-order) prekrio donju poluvičku sunca.
+          Centar sunca je na visini terena (~25% od dna layerSavanna).
+        */}
+        <div className={styles.sunWrap}>
+          <div className={styles.sunGlow} />
+          <div className={styles.sunDisc} />
+        </div>
+        <SavannaScene />
+      </div>
+    </>
   )
 }
 
 function SavannaScene() {
-  /*
-    viewBox: 1440 × 320. preserveAspectRatio="xMidYMax slice":
-    - skalira da popuni širinu kontejnera,
-    - ako treba da popuni visinu, cropi horizontalno od centra,
-    - YMax = tlo uvek na dnu.
-    Drvo akacije oko x=760 (blizu centra) — bezbedno pri crop-u.
-  */
   return (
     <svg
       className={styles.savannaSvg}
@@ -114,15 +163,12 @@ function SavannaScene() {
         fill="rgba(14, 6, 0, 0.92)"
       />
 
-      {/* Akacijino drvo — ikonična flat-top silueta, centar ~x=760 */}
-      <g transform="translate(740, 58)">
-        {/* Stablo */}
+      {/* Akacijino drvo — ikonična flat-top silueta, pomerena levo (~30% širine) */}
+      <g transform="translate(430, 73)">
         <rect x="17" y="118" width="11" height="62" fill="rgba(12, 5, 0, 0.95)" rx="4"/>
-        {/* Grane */}
         <line x1="22" y1="138" x2="-18" y2="102" stroke="rgba(12, 5, 0, 0.95)" strokeWidth="7" strokeLinecap="round"/>
         <line x1="22" y1="143" x2="62"  y2="108" stroke="rgba(12, 5, 0, 0.95)" strokeWidth="7" strokeLinecap="round"/>
         <line x1="22" y1="133" x2="8"   y2="98"  stroke="rgba(12, 5, 0, 0.95)" strokeWidth="5" strokeLinecap="round"/>
-        {/* Ravna kruna akacije */}
         <ellipse cx="22"  cy="78" rx="72" ry="24" fill="rgba(12, 5, 0, 0.95)"/>
         <ellipse cx="-28" cy="98" rx="38" ry="17" fill="rgba(12, 5, 0, 0.95)"/>
         <ellipse cx="68"  cy="94" rx="42" ry="19" fill="rgba(12, 5, 0, 0.95)"/>

@@ -1,13 +1,19 @@
 /*
   Kontinuirani pozadinski svet: noćno nebo (vrh) → zalazak (sredina) → zlatna savana (dno).
-  Visina = visina jednog ekrana × 4, pa su procenti po sekcijama:
+  Procenti po sekcijama (svaka = 25% visine sveta):
     S1: 0–25%  | S2: 25–50% | S3: 50–75% | S4: 75–100%
+
+  Tri odvojena sloja za paralaks:
+    layerGradient — bez paralaksa (boja mora pratiti poziciju sekcije)
+    layerStars    — GSAP animira translateY: 80% brzine kamere (efekat daljine)
+    layerSavanna  — bez paralaksa (drvo+teren moraju ostati spojeni)
 */
-.worldBg {
+
+/* ── Sloj 1: gradijentno nebo (bez paralaksa) ── */
+.layerGradient {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
   background: linear-gradient(
     to bottom,
     #0A0E22  0%,
@@ -28,7 +34,15 @@
   );
 }
 
-/* ── Zvezde ── */
+/* ── Sloj 2: zvezde (paralaks — GSAP translateY) ── */
+.layerStars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  will-change: transform;
+}
+
 .star {
   position: absolute;
   border-radius: 50%;
@@ -56,14 +70,107 @@
   .star { animation: none; }
 }
 
-/* ── Silhueta savane ── */
-.savannaWrap {
+/* ── Sloj 3: lebdeći svici (sekcije 3–4, topla atmosfera) ── */
+.layerFireflies {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.firefly {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff8d0 0%, #ffd040 55%, rgba(255, 140, 20, 0.15) 100%);
+  box-shadow:
+    0 0 5px 2px rgba(255, 195, 50, 0.65),
+    0 0 12px 4px rgba(255, 140, 20, 0.28);
+  animation: fireflyFloat var(--ff-dur, 4s) ease-in-out infinite var(--ff-delay, 0s);
+  opacity: var(--fly-opacity, 0.65);
+}
+
+@keyframes fireflyFloat {
+  0%   { transform: translate(0px, 0px);                                        opacity: var(--fly-opacity, 0.65); }
+  28%  { transform: translate(var(--fx, 8px), var(--fy, -5px));                opacity: calc(var(--fly-opacity, 0.65) * 1.6); }
+  55%  { transform: translate(0px, calc(var(--fy, -5px) * 1.4));               opacity: calc(var(--fly-opacity, 0.65) * 0.3); }
+  80%  { transform: translate(calc(var(--fx, 8px) * -0.65), var(--fy, -5px)); opacity: calc(var(--fly-opacity, 0.65) * 1.25); }
+  100% { transform: translate(0px, 0px);                                        opacity: var(--fly-opacity, 0.65); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .firefly { animation: none; }
+}
+
+/* ── Sloj 4: sunce + silhueta savane (bez paralaksa) ── */
+.layerSavanna {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
   height: clamp(220px, 34dvh, 380px);
   pointer-events: none;
+}
+
+/*
+  Sunce na horizontu.
+  .sunWrap je "tačka" (width:0, height:0) sidrana za visinu terena:
+    • bottom: 25% ≈ pozicija terena u SVG (y≈239/320 od vrha, xMidYMax slice)
+    • left: 50% — horizontalni centar (ispred prostora između drveća)
+  Oba deteta (glow + disc) se centriraju na tu tačku via translate(-50%, -50%).
+  SVG teren dolazi POSLE u DOM-u → viši z-order → pokriva donju poluvičku sunca.
+*/
+.sunWrap {
+  position: absolute;
+  bottom: 28%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.sunGlow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(200px, 38vw, 360px);
+  height: clamp(200px, 38vw, 360px);
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(255, 220, 80, 0.42)  0%,
+    rgba(255, 145, 30, 0.24) 30%,
+    rgba(220, 75,  10, 0.10) 58%,
+    transparent               82%
+  );
+  animation: sunGlowPulse 5.5s ease-in-out infinite;
+}
+
+.sunDisc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(58px, 10vw, 100px);
+  height: clamp(58px, 10vw, 100px);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 40% 36%,
+    #FFE870  0%,
+    #FFBE20 40%,
+    #FF8800 78%,
+    #E45800 100%
+  );
+  box-shadow:
+    0 0 20px 8px  rgba(255, 185, 40, 0.70),
+    0 0 48px 16px rgba(255, 115, 20, 0.35),
+    0 0 90px 30px rgba(240, 80,   5, 0.15);
+}
+
+@keyframes sunGlowPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: 0.78; }
+  50%       { transform: translate(-50%, -50%) scale(1.14); opacity: 1;    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunGlow { animation: none; transform: translate(-50%, -50%); opacity: 0.88; }
 }
 
 .savannaSvg {

@@ -9,6 +9,14 @@ import Screen4 from '../components/Screen4'
 import WorldBackground from '../components/WorldBackground'
 import { supabase } from '../lib/supabaseClient'
 
+/*
+  Paralaks faktor za zvezdani sloj:
+  Zvezde se kreću 80% brzinom kamere (STARS_LAG=0.2 → kontra-pomak 20% u okviru sveta).
+  Net efekt: zvezde izgledaju kao da vise daleko u prostoru i sporo klize.
+  Matematika: starsY = +STARS_LAG × (step-1) × H  (pozitivno = protivno kameri unutar sveta)
+*/
+const STARS_LAG = 0.2
+
 export default function Invitation() {
   // ── State ── (identičan sa prethodnom verzijom)
   const [currentStep, setCurrentStep] = useState(1)
@@ -27,36 +35,46 @@ export default function Invitation() {
   // Sinhronizacija ref-a sa state-om (za resize handler koji nema pristup closure state-u)
   currentStepRef.current = currentStep
 
-  // ── Kamera: pomera svet po Y osi kad se menja korak ──
+  // ── Kamera + paralaks: pomera svet i zvezdani sloj pri svakoj promeni koraka ──
   useEffect(() => {
     const world = worldRef.current
     if (!world) return
 
+    const starsEl = world.querySelector('[data-parallax="stars"]')
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     const targetY = -(currentStep - 1) * window.innerHeight
+    // Zvezdani sloj se pomera u suprotnom smeru od kamere (unutar sveta),
+    // što u prostoru ekrana rezultuje 80% brzinom kamere → osećaj duboke daljine.
+    const starsY  = STARS_LAG * (currentStep - 1) * window.innerHeight
 
     if (prefersReduced) {
+      // Bez paralaksa: sve se kreće kao jedna celina (dostupno korisnicima)
       gsap.set(world, { y: targetY })
+      if (starsEl) gsap.set(starsEl, { y: 0 })
       return
     }
 
-    const tween = gsap.to(world, {
-      y: targetY,
-      duration: 1.25,
-      ease: 'power2.inOut',
-      overwrite: true,
-    })
+    // GSAP timeline — obe animacije startuju istovremeno (pozicija "0")
+    const tl = gsap.timeline()
+      .to(world, { y: targetY, duration: 1.25, ease: 'power2.inOut', overwrite: true }, 0)
+    if (starsEl) {
+      tl.to(starsEl, { y: starsY, duration: 1.25, ease: 'power2.inOut', overwrite: true }, 0)
+    }
 
-    return () => tween.kill()
+    return () => tl.kill()
   }, [currentStep])
 
-  // ── Resize: resinhronizuj kameru kad se promeni visina viewporta (keyboard, rotacija) ──
+  // ── Resize: resinhronizuj kameru i paralaks kad se promeni visina viewporta ──
   useEffect(() => {
     const world = worldRef.current
     if (!world) return
 
     const handleResize = () => {
-      gsap.set(world, { y: -(currentStepRef.current - 1) * window.innerHeight })
+      const step = currentStepRef.current
+      gsap.set(world, { y: -(step - 1) * window.innerHeight })
+      const starsEl = world.querySelector('[data-parallax="stars"]')
+      if (starsEl) gsap.set(starsEl, { y: STARS_LAG * (step - 1) * window.innerHeight })
     }
 
     window.addEventListener('resize', handleResize)
